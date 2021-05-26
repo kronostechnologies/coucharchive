@@ -4,6 +4,7 @@
 # All rights reserved
 
 import argparse
+import boto3
 import configparser
 import fileinput
 import getpass
@@ -30,6 +31,7 @@ import urllib.request
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlsplit, urlunsplit, unquote
+from botocore.exceptions import ClientError
 
 import couchdb
 
@@ -654,8 +656,15 @@ def bug_1418_create_missing_documents(source_db, target_db):
 
 
 def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
+    s3_upload = filename.startswith('s3://')
     erlang_node = 'coucharchive-%s@localhost' % ''.join(
         random.choice(string.ascii_letters + string.digits) for _ in range(10))
+
+    if s3_upload:
+        url = urlsplit(filename)
+        filename = os.path.join('/tmp', os.path.basename(url.path))
+        bucket = url.hostname
+        object_path = datetime.strftime(datetime.now(), url.path)
 
     with CouchDBInstance(erlang_node) as local_couchdb:
         local_couchdb.start()
@@ -685,6 +694,12 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
             file = tarfile.TarInfo('info')
             file.size = len(info)
             tar.addfile(file, BytesIO(info))
+
+    if s3_upload:
+        logging.info('Uploading to s3://%s%s' % (bucket, object_path))
+        s3 = boto3.client('s3')
+        with open(filename, "rb") as f:
+            s3.upload_fileobj(f, bucket, object_path)
 
 
 def _load_archive(filename, callback):
