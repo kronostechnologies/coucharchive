@@ -661,7 +661,7 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
 
     if s3_upload:
         url = urlsplit(filename)
-        object_path = datetime.strftime(datetime.now().astimezone(), url.path)
+        object_path = datetime.strftime(datetime.now().astimezone(), url.path).lstrip('/')
         filename = os.path.join('/tmp', os.path.basename(object_path))
         bucket = url.hostname
     else:
@@ -697,7 +697,7 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
             tar.addfile(file, BytesIO(info))
 
     if s3_upload:
-        logging.info('Uploading to s3://%s%s' % (bucket, object_path))
+        logging.info('Uploading to s3://%s/%s' % (bucket, object_path))
         s3 = boto3.client('s3')
         with open(filename, "rb") as f:
             s3.upload_fileobj(f, bucket, object_path)
