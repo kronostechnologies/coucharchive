@@ -430,7 +430,7 @@ class ReplicationControl(object):
 
 
 def replicate_couchdb_server(source, target, max_workers,
-                             reuse_db_if_exist=False,
+                             db_exists_action='fail',
                              ignore_dbs=[],
                              ideal_duration=None):
     ignore_dbs += ('_global_changes', '_metadata', '_replicator')
@@ -445,7 +445,7 @@ def replicate_couchdb_server(source, target, max_workers,
     control = ReplicationControl(len(dbs), ideal_duration, max_workers)
     pool = multiprocessing.Pool(max_workers, replicate_databases,
                                 (in_queue, out_queue, control, source,
-                                 target, reuse_db_if_exist))
+                                 target, db_exists_action))
     error = None
     last_log = time.time()
 
@@ -497,7 +497,7 @@ def replicate_couchdb_server(source, target, max_workers,
 
 
 def replicate_databases(in_queue, out_queue, control, source, target,
-                        reuse_db_if_exist):
+                        db_exists_action):
     while True:
         try:
             db = in_queue.get(True, 1)
@@ -508,28 +508,38 @@ def replicate_databases(in_queue, out_queue, control, source, target,
             break
 
         try:
-            replicate_one_database(control, source, target, reuse_db_if_exist, db)
+            replicate_one_database(control, source, target, db_exists_action, db)
             out_queue.put(True)  # message to report success to the parent
         except Exception as e:
             out_queue.put(e)  # message to report failure to the parent
             raise
 
 
-def replicate_one_database(control, source, target, reuse_db_if_exist, db):
-    retries = 10
-
+def replicate_one_database(control, source, target, db_exists_action, db):
     source_server = couchdb.Server(couchdb.http.Resource(**source, session=None))
     target_server = couchdb.Server(couchdb.http.Resource(**target, session=None))
     replication_server = source_server if _couchdb_is_local(source) else target_server
+    create_target_db = True
 
     try:
-        target_server.create(db)
-    except couchdb.http.PreconditionFailed as e:
-        if e.args[0][0] == 'file_exists' and db in ('_users',):
-            pass
-        elif e.args[0][0] == 'file_exists' and reuse_db_if_exist:
-            pass
-        else:
+        if target_server[db]:
+            if db_exists_action == 'recreate':
+                logging.debug('Deleting existing database %s' % db)
+                target_server.delete(db)
+            elif db_exists_action == 'reuse':
+                logging.debug('Reusing database %s' % db)
+                create_target_db = False
+            else:
+                logging.error('Can\'t create database %s: already exists' % db)
+                return
+    except couchdb.http.ResourceNotFound:
+        pass
+
+    if create_target_db:
+        try:
+            logging.debug('Creating database %s' % db)
+            target_server.create(db)
+        except couchdb.http.PreconditionFailed as e:
             logging.error('Failed to create database %s' % db)
             raise
 
@@ -543,6 +553,7 @@ def replicate_one_database(control, source, target, reuse_db_if_exist, db):
     source_db = source_server[db]
     target_db = target_server[db]
 
+    retries = 10
     while True:
         try:
             target_db.security = source_db.security
@@ -562,10 +573,21 @@ def replicate_one_database(control, source, target, reuse_db_if_exist, db):
             control.report_error()
             time.sleep(control.ideal_sleep_value())
             retries -= 1
+        except couchdb.http.Forbidden as e:
+            if retries == 0:
+                raise e
+            if db in ('_users',):
+                logging.warning('Could not set %s database security: %s' % (db, e))
+                break
+            control.report_error()
+            time.sleep(control.ideal_sleep_value())
+            retries -= 1
+
 
     # Check if source and target have the same number of documents. If not, it
     # can be explained by two reasons: source db had a new document created
     # during replication, or bug #1418 happened.
+    retries = 10
     while True:
         try:
             source_len, target_len = len(source_db), len(target_db)
@@ -739,12 +761,12 @@ def load(filename):
     _load_archive(filename, callback)
 
 
-def restore(target, filename, max_workers, reuse_db_if_exist=False,
+def restore(target, filename, max_workers, db_exists_action='fail',
             ignore_dbs=[], ideal_duration=None):
     def callback(local_couch_server_url):
         source = _couchdb_basic_auth_payload(local_couch_server_url)
         replicate_couchdb_server(source, target, max_workers,
-                                 reuse_db_if_exist=reuse_db_if_exist,
+                                 db_exists_action=db_exists_action,
                                  ignore_dbs=ignore_dbs,
                                  ideal_duration=ideal_duration)
 
@@ -824,9 +846,10 @@ def main():
         '-i', '--input', dest='source_file', action='store',
         help='path to archive to restore')
     sub['restore'].add_argument(
-        '--reuse-db-if-exist', dest='reuse_db_if_exist',
-        action='store_true', default=False,
-        help='continue restoration even if database exists on target')
+        '--db-exists-action', dest='db_exists_action',
+        action='store', default='fail',
+        help='continue restoration even if database exists on target',
+        choices=['reuse', 'recreate', 'fail'])
     sub['restore'].add_argument(
         '--ideal-duration', dest='ideal_duration', action='store',
         help='optimize concurrent replications and server load to finish in N '
@@ -973,14 +996,14 @@ def main():
                ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'restore':
         restore(target_server, source_file, args.max_workers,
-                reuse_db_if_exist=args.reuse_db_if_exist,
+                db_exists_action=args.db_exists_action,
                 ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'load':
         load(source_file)
     elif args.action == 'replicate':
         replicate_couchdb_server(source_server, target_server,
                                  args.max_workers,
-                                 reuse_db_if_exist=args.reuse_db_if_exist,
+                                 db_exists_action=args.db_exists_action,
                                  ignore_dbs=ignore_dbs,
                                  ideal_duration=args.ideal_duration)
     else:
