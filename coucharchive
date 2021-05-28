@@ -835,7 +835,7 @@ def main():
 
     sub['load'] = subparsers.add_parser('load')
     sub['load'].add_argument(
-        '-i', '--input', dest='input', action='store', required=True,
+        '-i', '--input', dest='source_file', action='store',
         help='path to archive to load')
 
     sub['replicate'] = subparsers.add_parser('replicate')
@@ -899,6 +899,18 @@ def main():
     if args.config_file:
         config.read(args.config_file)
 
+    if args.action == 'create':
+        target_file = args.target_file if args.target_file else config.get('target', 'file', fallback=None)
+        if not target_file:
+            sub[args.action].print_help()
+            parser.exit(1)
+
+    if args.action in ('restore', 'load'):
+        source_file = args.source_file if args.source_file else config.get('source', 'file', fallback=None)
+        if not source_file:
+            sub[args.action].print_help()
+            parser.exit(1)
+
     if args.action in ('create', 'replicate'):
         source_args = {
             'url': args.source_server_url,
@@ -943,14 +955,14 @@ def main():
         ignore_dbs = [db.strip() for db in ignore_dbs if db.strip()]
 
     if args.action == 'create':
-        create(source_server, args.target_file, args.max_workers,
+        create(source_server, target_file, args.max_workers,
                ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'restore':
-        restore(target_server, args.source_file, args.max_workers,
+        restore(target_server, source_file, args.max_workers,
                 reuse_db_if_exist=args.reuse_db_if_exist,
                 ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'load':
-        load(args.input)
+        load(source_file)
     elif args.action == 'replicate':
         replicate_couchdb_server(source_server, target_server,
                                  args.max_workers,
