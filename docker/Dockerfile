@@ -1,7 +1,7 @@
 FROM debian:buster-slim
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install ca-certificates -y && apt clean
+RUN apt update && apt full-upgrade -y && apt install ca-certificates -y && apt clean
 
 COPY ./docker/couchdb.gpg /etc/apt/trusted.gpg.d/couchdb.gpg
 RUN echo "deb https://apache.jfrog.io/artifactory/couchdb-deb/ buster main" > /etc/apt/sources.list.d/couchdb.list
