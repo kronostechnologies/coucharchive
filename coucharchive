@@ -4,7 +4,6 @@
 # All rights reserved
 
 import argparse
-import boto3
 import configparser
 import fileinput
 import getpass
@@ -31,8 +30,8 @@ import urllib.request
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlsplit, urlunsplit, unquote
-from botocore.exceptions import ClientError
 
+import boto3
 import couchdb
 
 
@@ -790,7 +789,7 @@ def main():
         '--from-token', dest='source_server_token', action='store',
         help='source CouchDB server proxy auth token')
     sub['create'].add_argument(
-        '-o', '--output', dest='output', action='store', required=True,
+        '-o', '--output', dest='target_file', action='store',
         help='path to archive to create')
     sub['create'].add_argument(
         '--ideal-duration', dest='ideal_duration', action='store',
@@ -820,7 +819,7 @@ def main():
         '--to-token', dest='target_server_token', action='store',
         help='source CouchDB server proxy auth token')
     sub['restore'].add_argument(
-        '-i', '--input', dest='input', action='store', required=True,
+        '-i', '--input', dest='source_file', action='store',
         help='path to archive to restore')
     sub['restore'].add_argument(
         '--reuse-db-if-exist', dest='reuse_db_if_exist',
@@ -909,7 +908,8 @@ def main():
             'roles': args.source_server_roles,
             'token': args.source_server_token,
         }
-        source_config = {**config['source'], **source_args} if 'source' in config.sections() else source_args
+        source_config = {k: v for k, v in config['source'].items() if v} if 'source' in config.sections() else {}
+        source_config.update({k: v for k, v in source_args.items() if v is not None})
 
         if not source_config.get('url'):
             sub[args.action].print_help()
@@ -927,7 +927,8 @@ def main():
             'roles': args.target_server_roles,
             'token': args.target_server_token,
         }
-        target_config = {**config['target'], **target_args} if 'target' in config.sections() else target_args
+        target_config = {k: v for k, v in config['target'].items() if v} if 'target' in config.sections() else {}
+        target_config.update({k: v for k, v in target_args.items() if v is not None})
 
         if not target_config.get('url'):
             sub[args.action].print_help()
@@ -942,10 +943,10 @@ def main():
         ignore_dbs = [db.strip() for db in ignore_dbs if db.strip()]
 
     if args.action == 'create':
-        create(source_server, args.output, args.max_workers,
+        create(source_server, args.target_file, args.max_workers,
                ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'restore':
-        restore(target_server, args.input, args.max_workers,
+        restore(target_server, args.source_file, args.max_workers,
                 reuse_db_if_exist=args.reuse_db_if_exist,
                 ignore_dbs=ignore_dbs, ideal_duration=args.ideal_duration)
     elif args.action == 'load':
