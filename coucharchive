@@ -430,7 +430,7 @@ class ReplicationControl(object):
 
 
 def replicate_couchdb_server(source, target, max_workers,
-                             db_exists_action='fail',
+                             db_exists_action='skip',
                              ignore_dbs=[],
                              ideal_duration=None):
     ignore_dbs += ('_global_changes', '_metadata', '_replicator')
@@ -761,7 +761,7 @@ def load(filename):
     _load_archive(filename, callback)
 
 
-def restore(target, filename, max_workers, db_exists_action='fail',
+def restore(target, filename, max_workers, db_exists_action='skip',
             ignore_dbs=[], ideal_duration=None):
     def callback(local_couch_server_url):
         source = _couchdb_basic_auth_payload(local_couch_server_url)
@@ -847,9 +847,9 @@ def main():
         help='path to archive to restore')
     sub['restore'].add_argument(
         '--db-exists-action', dest='db_exists_action',
-        action='store', default='fail',
-        help='continue restoration even if database exists on target',
-        choices=['reuse', 'recreate', 'fail'])
+        action='store', default='skip',
+        help='action when database exists on target',
+        choices=['reuse', 'recreate', 'skip'])
     sub['restore'].add_argument(
         '--ideal-duration', dest='ideal_duration', action='store',
         help='optimize concurrent replications and server load to finish in N '
@@ -901,9 +901,10 @@ def main():
         '--to-token', dest='target_server_token', action='store',
         help='source CouchDB server proxy auth token')
     sub['replicate'].add_argument(
-        '--reuse-db-if-exist', dest='reuse_db_if_exist',
-        action='store_true', default=False,
-        help='continue replication even if database exists on target')
+        '--db-exists-action', dest='db_exists_action',
+        action='store', default='skip',
+        help='action when database exists on target',
+        choices=['reuse', 'recreate', 'skip'])
     sub['replicate'].add_argument(
         '--ideal-duration', dest='ideal_duration', action='store',
         help='optimize concurrent replications and server load to finish in N '
