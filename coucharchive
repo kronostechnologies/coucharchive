@@ -775,7 +775,7 @@ def main():
         help='source CouchDB server to create archive from')
     sub['create'].add_argument(
         '--from-auth-method', dest='source_server_auth_method', action='store',
-        help='source CouchDB server auth method', default='basic', choices=['basic', 'proxy'])
+        help='source CouchDB server auth method', choices=['basic', 'proxy'])
     sub['create'].add_argument(
         '--from-username', dest='source_server_username', action='store',
         help='source CouchDB server username')
@@ -805,7 +805,7 @@ def main():
         help='target CouchDB server to restore archive to')
     sub['restore'].add_argument(
         '--to-auth-method', dest='target_server_auth_method', action='store',
-        help='source CouchDB server auth method', default='basic', choices=['basic', 'proxy'])
+        help='source CouchDB server auth method', choices=['basic', 'proxy'])
     sub['restore'].add_argument(
         '--to-username', dest='target_server_username', action='store',
         help='source CouchDB server username')
@@ -844,7 +844,7 @@ def main():
         help='source CouchDB server to replicate from')
     sub['replicate'].add_argument(
         '--from-auth-method', dest='source_server_auth_method', action='store',
-        help='source CouchDB server auth method', default='basic', choices=['basic', 'proxy'])
+        help='source CouchDB server auth method', choices=['basic', 'proxy'])
     sub['replicate'].add_argument(
         '--from-username', dest='source_server_username', action='store',
         help='source CouchDB server username')
@@ -862,7 +862,7 @@ def main():
         help='target CouchDB server to replicate to')
     sub['replicate'].add_argument(
         '--to-auth-method', dest='target_server_auth_method', action='store',
-        help='source CouchDB server auth method', default='basic', choices=['basic', 'proxy'])
+        help='source CouchDB server auth method', choices=['basic', 'proxy'])
     sub['replicate'].add_argument(
         '--to-username', dest='target_server_username', action='store',
         help='source CouchDB server username')
@@ -912,6 +912,13 @@ def main():
             parser.exit(1)
 
     if args.action in ('create', 'replicate'):
+        source_config = {
+            'auth_method': 'basic',
+        }
+
+        if 'source' in config.sections():
+            source_config.update({k: v for k, v in config['source'].items() if v})
+
         source_args = {
             'url': args.source_server_url,
             'auth_method': args.source_server_auth_method,
@@ -920,7 +927,6 @@ def main():
             'roles': args.source_server_roles,
             'token': args.source_server_token,
         }
-        source_config = {k: v for k, v in config['source'].items() if v} if 'source' in config.sections() else {}
         source_config.update({k: v for k, v in source_args.items() if v is not None})
 
         if not source_config.get('url'):
@@ -931,6 +937,13 @@ def main():
         _check_couchdb_connection(source_server)
 
     if args.action in ('restore', 'replicate'):
+        target_config = {
+            'auth_method': 'basic',
+        }
+
+        if 'target' in config.sections():
+            target_config.update({k: v for k, v in config['target'].items() if v})
+
         target_args = {
             'url': args.target_server_url,
             'auth_method': args.target_server_auth_method,
@@ -939,7 +952,6 @@ def main():
             'roles': args.target_server_roles,
             'token': args.target_server_token,
         }
-        target_config = {k: v for k, v in config['target'].items() if v} if 'target' in config.sections() else {}
         target_config.update({k: v for k, v in target_args.items() if v is not None})
 
         if not target_config.get('url'):
