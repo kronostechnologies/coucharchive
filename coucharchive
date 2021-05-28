@@ -663,7 +663,7 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
         url = urlsplit(filename)
         filename = os.path.join('/tmp', os.path.basename(url.path))
         bucket = url.hostname
-        object_path = datetime.strftime(datetime.now(), url.path)
+        object_path = datetime.strftime(datetime.now().astimezone(), url.path)
 
     with CouchDBInstance(erlang_node) as local_couchdb:
         local_couchdb.start()
@@ -686,7 +686,7 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
             tar.addfile(file, BytesIO(erlang_node.encode('utf-8')))
 
             info = (
-                    'CouchDB backup made on %s\n' % datetime.now().isoformat() +
+                    'CouchDB backup made on %s\n' % datetime.now().astimezone().isoformat() +
                     'with CouchDB version %s, ' % local_couchdb.version +
                     'info: %s\n' % local_couchdb.version_info
             ).encode('utf-8')
