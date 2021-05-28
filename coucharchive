@@ -661,9 +661,11 @@ def create(source, filename, max_workers, ignore_dbs=[], ideal_duration=None):
 
     if s3_upload:
         url = urlsplit(filename)
-        filename = os.path.join('/tmp', os.path.basename(url.path))
-        bucket = url.hostname
         object_path = datetime.strftime(datetime.now().astimezone(), url.path)
+        filename = os.path.join('/tmp', os.path.basename(object_path))
+        bucket = url.hostname
+    else:
+        filename = datetime.strftime(datetime.now().astimezone(), filename)
 
     with CouchDBInstance(erlang_node) as local_couchdb:
         local_couchdb.start()
